@@ -5,12 +5,15 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.hardware.camera2.CaptureRequest
 import android.media.AudioManager
 import android.util.Log
 import android.util.Range
 import android.util.Size
 import androidx.annotation.MainThread
 import androidx.annotation.OptIn
+import androidx.camera.camera2.interop.Camera2Interop
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraControl
 import androidx.camera.core.CameraSelector
@@ -225,7 +228,7 @@ class CameraSession(private val context: Context, private val callback: Callback
     }
   }
 
-  @OptIn(ExperimentalGetImage::class)
+  @OptIn(ExperimentalGetImage::class, ExperimentalCamera2Interop::class)
   @SuppressLint("RestrictedApi")
   @Suppress("LiftReturnOrAssignment")
   private fun configureOutputs(configuration: CameraConfiguration) {
@@ -345,6 +348,16 @@ class CameraSession(private val context: Context, private val callback: Callback
       val pixelFormat = frameProcessorConfig.config.pixelFormat
       Log.i(TAG, "Creating $pixelFormat Frame Processor output...")
       val analyzer = ImageAnalysis.Builder().also { analysis ->
+
+        // Fix for CameraX not respecting lower bound even when `lowLightBoost` is set to `false`
+        if (fpsRange != null) {
+          val camera2Interop = Camera2Interop.Extender(analysis)
+          camera2Interop.setCaptureRequestOption(
+            CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+            fpsRange
+          )
+        }
+        
         analysis.setBackpressureStrategy(ImageAnalysis.STRATEGY_BLOCK_PRODUCER)
         analysis.setOutputImageFormat(pixelFormat.toImageAnalysisFormat())
         if (format != null) {
